@@ -92,15 +92,18 @@
             position: absolute;
             top: 18px;
             right: 18px;
-            background: #111;
-            color: #fff;
-            text-decoration: none;
-            border: 2px solid #333;
-            padding: 10px 16px;
+            width: 44px;
+            height: 44px;
             border-radius: 10px;
-            font: bold 14px/1 'Courier New', monospace;
-            letter-spacing: 1px;
+            overflow: hidden;
+            border: 2px solid #333;
+            background: #111;
             transition: all 0.2s;
+        }
+        .discord-btn img {
+            width: 100%;
+            height: 100%;
+            display: block;
         }
         .discord-btn:hover {
             border-color: #00ffff;
@@ -109,7 +112,9 @@
     </style>
 </head>
 <body>
-    <a class="discord-btn" href="https://discord.gg/pD6tDXbSum" target="_blank" rel="noopener">DISCORD</a>
+    <a class="discord-btn" href="https://discord.gg/pD6tDXbSum" target="_blank" rel="noopener">
+        <img src="DiscordIcon.png" alt="Discord">
+    </a>
     <div class="container">
         <h1>ARCADE</h1>
         <div class="subtitle">SELECT A GAME</div>
