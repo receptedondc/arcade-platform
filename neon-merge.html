@@ -31,7 +31,7 @@
 
         function resize() {
             canvas.width = Math.min(window.innerWidth - 40, 500);
-            canvas.height = Math.min(window.innerHeight - 40, 600);
+            canvas.height = Math.min(window.innerHeight - 40, 700);
         }
         window.addEventListener('resize', resize);
         resize();
@@ -39,10 +39,12 @@
         const State = { MENU: 0, PLAYING: 1, GAMEOVER: 2 };
         let state = State.MENU;
 
-        const GRID = 4;
-        let CELL = Math.min(canvas.width, canvas.height) / (GRID + 1);
-        let OFFSET_X = (canvas.width - CELL * GRID) / 2;
-        let OFFSET_Y = (canvas.height - CELL * GRID) / 2;
+        const COLS = 6;
+        const CELL = 60;
+        const BOARD_W = COLS * CELL;
+        const BOARD_H = Math.floor(canvas.height * 0.85);
+        const OFFSET_X = Math.floor((canvas.width - BOARD_W) / 2);
+        const OFFSET_Y = Math.floor((canvas.height - BOARD_H) / 2);
 
         const COLORS = {
             2: '#00ffff',
@@ -59,8 +61,12 @@
         };
 
         let board = [];
+        let current = null;
         let score = 0;
         let bestScore = 0;
+        let dropInterval = 500;
+        let lastDrop = 0;
+        let gameOver = false;
 
         try {
             bestScore = parseInt(localStorage.getItem('merge_best') || '0');
@@ -73,127 +79,102 @@
         }
 
         function resetGame() {
-            board = Array(GRID).fill().map(() => Array(GRID).fill(0));
+            board = Array(Math.floor(BOARD_H / CELL)).fill().map(() => Array(COLS).fill(0));
             score = 0;
-            spawnTile();
-            spawnTile();
+            gameOver = false;
+            lastDrop = 0;
+            spawnBlock();
         }
 
-        function spawnTile() {
-            const empty = [];
-            for (let y = 0; y < GRID; y++) {
-                for (let x = 0; x < GRID; x++) {
-                    if (board[y][x] === 0) empty.push({x, y});
-                }
-            }
-            if (empty.length === 0) return false;
-            const cell = empty[Math.floor(Math.random() * empty.length)];
-            board[cell.y][cell.x] = Math.random() < 0.9 ? 2 : 4;
+        function spawnBlock() {
+            const value = Math.random() < 0.9 ? 2 : 4;
+            current = {
+                x: Math.floor(COLS / 2),
+                y: 0,
+                value: value
+            };
+        }
+
+        function isValidPosition(block, offsetX = 0, offsetY = 0) {
+            const nx = block.x + offsetX;
+            const ny = block.y + offsetY;
+            if (nx < 0 || nx >= COLS || ny < 0) return false;
+            if (ny >= board.length) return false;
+            if (board[ny][nx] !== 0) return false;
             return true;
         }
 
-        function slide(row) {
-            let arr = row.filter(v => v !== 0);
-            let merged = Array(GRID).fill(false);
-            let scoreGain = 0;
+        function placeBlock() {
+            if (!current) return;
+            const row = current.y;
+            const col = current.x;
+            if (row < 0 || row >= board.length || col < 0 || col >= COLS) {
+                gameOver = true;
+                return;
+            }
+            board[row][col] = current.value;
+            current = null;
+            checkMatches();
+            spawnBlock();
+            if (!isValidPosition(current)) {
+                gameOver = true;
+            }
+        }
 
-            for (let i = 0; i < arr.length - 1; i++) {
-                if (arr[i] !== 0 && arr[i] === arr[i + 1] && !merged[i]) {
-                    arr[i] *= 2;
-                    scoreGain += arr[i];
-                    arr[i + 1] = 0;
-                    merged[i] = true;
+        function checkMatches() {
+            let matched = true;
+            while (matched) {
+                matched = false;
+                for (let y = 0; y < board.length; y++) {
+                    for (let x = 0; x < COLS; x++) {
+                        const val = board[y][x];
+                        if (val === 0) continue;
+                        // Check horizontal match
+                        if (x + 2 < COLS && board[y][x + 1] === val && board[y][x + 2] === val) {
+                            board[y][x] = 0;
+                            board[y][x + 1] = 0;
+                            board[y][x + 2] = 0;
+                            score += val * 3;
+                            matched = true;
+                        }
+                        // Check vertical match
+                        if (y + 2 < board.length && board[y + 1][x] === val && board[y + 2][x] === val) {
+                            board[y][x] = 0;
+                            board[y + 1][x] = 0;
+                            board[y + 2][x] = 0;
+                            score += val * 3;
+                            matched = true;
+                        }
+                    }
+                }
+                applyGravity();
+            }
+        }
+
+        function applyGravity() {
+            for (let x = 0; x < COLS; x++) {
+                let writeY = board.length - 1;
+                for (let y = board.length - 1; y >= 0; y--) {
+                    if (board[y][x] !== 0) {
+                        if (y !== writeY) {
+                            board[writeY][x] = board[y][x];
+                            board[y][x] = 0;
+                        }
+                        writeY--;
+                    }
                 }
             }
-
-            arr = arr.filter(v => v !== 0);
-            while (arr.length < GRID) arr.push(0);
-            return { row: arr, scoreGain };
         }
 
-        function moveLeft() {
-            let moved = false;
-            let gain = 0;
-            for (let y = 0; y < GRID; y++) {
-                const result = slide(board[y]);
-                if (board[y].join(',') !== result.row.join(',')) moved = true;
-                board[y] = result.row;
-                gain += result.scoreGain;
-            }
-            score += gain;
-            return moved;
-        }
-
-        function moveRight() {
-            let moved = false;
-            let gain = 0;
-            for (let y = 0; y < GRID; y++) {
-                const reversed = [...board[y]].reverse();
-                const result = slide(reversed);
-                const row = result.row.reverse();
-                if (board[y].join(',') !== row.join(',')) moved = true;
-                board[y] = row;
-                gain += result.scoreGain;
-            }
-            score += gain;
-            return moved;
-        }
-
-        function moveUp() {
-            let moved = false;
-            let gain = 0;
-            for (let x = 0; x < GRID; x++) {
-                let col = [];
-                for (let y = 0; y < GRID; y++) col.push(board[y][x]);
-                const result = slide(col);
-                if (col.join(',') !== result.row.join(',')) moved = true;
-                for (let y = 0; y < GRID; y++) board[y][x] = result.row[y];
-                gain += result.scoreGain;
-            }
-            score += gain;
-            return moved;
-        }
-
-        function moveDown() {
-            let moved = false;
-            let gain = 0;
-            for (let x = 0; x < GRID; x++) {
-                let col = [];
-                for (let y = GRID - 1; y >= 0; y--) col.push(board[y][x]);
-                const result = slide(col);
-                const reversed = result.row.reverse();
-                const orig = [];
-                for (let y = GRID - 1; y >= 0; y--) orig.push(reversed[y]);
-                if (col.join(',') !== result.row.join(',')) moved = true;
-                for (let y = 0; y < GRID; y++) board[y][x] = reversed[y];
-                gain += result.scoreGain;
-            }
-            score += gain;
-            return moved;
-        }
-
-        function canMove() {
-            for (let y = 0; y < GRID; y++) {
-                for (let x = 0; x < GRID; x++) {
-                    if (board[y][x] === 0) return true;
-                    if (x < GRID - 1 && board[y][x] === board[y][x + 1]) return true;
-                    if (y < GRID - 1 && board[y][x] === board[y + 1][x]) return true;
+        function update(timestamp) {
+            if (state !== State.PLAYING || gameOver) return;
+            if (timestamp - lastDrop > dropInterval) {
+                lastDrop = timestamp;
+                if (current && isValidPosition(current, 0, 1)) {
+                    current.y++;
+                } else if (current) {
+                    placeBlock();
                 }
-            }
-            return false;
-        }
-
-        function gameOver() {
-            state = State.GAMEOVER;
-            if (score > bestScore) {
-                bestScore = score;
-                saveProgress();
-            }
-        }
-
-        function update() {
-            if (state === State.PLAYING && !canMove()) {
-                gameOver();
             }
         }
 
@@ -201,31 +182,58 @@
             ctx.fillStyle = '#050505';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Grid background
-            for (let y = 0; y < GRID; y++) {
-                for (let x = 0; x < GRID; x++) {
-                    ctx.fillStyle = '#111';
-                    ctx.fillRect(OFFSET_X + x * CELL, OFFSET_Y + y * CELL, CELL - 4, CELL - 4);
-                }
+            // Board background
+            ctx.fillStyle = '#0a0a0a';
+            ctx.fillRect(OFFSET_X, OFFSET_Y, BOARD_W, BOARD_H);
+
+            // Grid lines
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 1;
+            for (let x = 0; x <= COLS; x++) {
+                ctx.beginPath();
+                ctx.moveTo(OFFSET_X + x * CELL, OFFSET_Y);
+                ctx.lineTo(OFFSET_X + x * CELL, OFFSET_Y + BOARD_H);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= Math.floor(BOARD_H / CELL); y++) {
+                ctx.beginPath();
+                ctx.moveTo(OFFSET_X, OFFSET_Y + y * CELL);
+                ctx.lineTo(OFFSET_X + BOARD_W, OFFSET_Y + y * CELL);
+                ctx.stroke();
             }
 
-            // Tiles
-            for (let y = 0; y < GRID; y++) {
-                for (let x = 0; x < GRID; x++) {
+            // Placed blocks
+            for (let y = 0; y < board.length; y++) {
+                for (let x = 0; x < COLS; x++) {
                     const val = board[y][x];
                     if (val === 0) continue;
                     const color = COLORS[val] || '#fff';
                     ctx.shadowColor = color;
-                    ctx.shadowBlur = 16;
+                    ctx.shadowBlur = 18;
                     ctx.fillStyle = color;
-                    ctx.fillRect(OFFSET_X + x * CELL + 4, OFFSET_Y + y * CELL + 4, CELL - 8, CELL - 8);
+                    ctx.fillRect(OFFSET_X + x * CELL + 5, OFFSET_Y + y * CELL + 5, CELL - 10, CELL - 10);
                     ctx.shadowBlur = 0;
                     ctx.fillStyle = '#000';
-                    ctx.font = `bold ${Math.floor(CELL * 0.4)}px Courier New`;
+                    ctx.font = 'bold 22px Courier New';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText(val, OFFSET_X + x * CELL + CELL / 2, OFFSET_Y + y * CELL + CELL / 2);
                 }
+            }
+
+            // Current falling block
+            if (current) {
+                const color = COLORS[current.value] || '#fff';
+                ctx.shadowColor = color;
+                ctx.shadowBlur = 22;
+                ctx.fillStyle = color;
+                ctx.fillRect(OFFSET_X + current.x * CELL + 5, OFFSET_Y + current.y * CELL + 5, CELL - 10, CELL - 10);
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = '#000';
+                ctx.font = 'bold 22px Courier New';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(current.value, OFFSET_X + current.x * CELL + CELL / 2, OFFSET_Y + current.y * CELL + CELL / 2);
             }
 
             // HUD
@@ -241,7 +249,7 @@
 
         function drawMenu() {
             ctx.fillStyle = '#00ffff';
-            ctx.font = 'bold 56px Courier New';
+            ctx.font = 'bold 52px Courier New';
             ctx.textAlign = 'center';
             ctx.shadowColor = '#00ffff';
             ctx.shadowBlur = 20;
@@ -250,21 +258,22 @@
 
             ctx.fillStyle = '#fff';
             ctx.font = '22px Courier New';
-            ctx.fillText('Use Arrow Keys or WASD', canvas.width / 2, canvas.height / 2 - 10);
-            ctx.fillText('Merge tiles to reach 2048', canvas.width / 2, canvas.height / 2 + 20);
-            ctx.fillText('Same-number tiles combine', canvas.width / 2, canvas.height / 2 + 50);
+            ctx.fillText('Drop numbered blocks', canvas.width / 2, canvas.height / 2 - 10);
+            ctx.fillText('A / D to move', canvas.width / 2, canvas.height / 2 + 20);
+            ctx.fillText('SPACE to drop', canvas.width / 2, canvas.height / 2 + 50);
+            ctx.fillText('Match 3 in a row to clear them', canvas.width / 2, canvas.height / 2 + 80);
 
             const time = Date.now() / 1000;
             const alpha = 0.5 + Math.sin(time * 3) * 0.5;
             ctx.globalAlpha = alpha;
             ctx.fillStyle = '#0ff';
             ctx.font = 'bold 22px Courier New';
-            ctx.fillText('PRESS ANY KEY TO START', canvas.width / 2, canvas.height / 2 + 110);
+            ctx.fillText('PRESS ANY KEY TO START', canvas.width / 2, canvas.height / 2 + 140);
             ctx.globalAlpha = 1;
 
             ctx.fillStyle = '#666';
             ctx.font = '16px Courier New';
-            ctx.fillText('ESC to return to Arcade', canvas.width / 2, canvas.height / 2 + 150);
+            ctx.fillText('ESC to return to Arcade', canvas.width / 2, canvas.height / 2 + 180);
         }
 
         function drawGameOver() {
@@ -305,8 +314,8 @@
             ctx.fillText('ESC to return to Arcade', canvas.width / 2, canvas.height / 2 + 130);
         }
 
-        function loop() {
-            update();
+        function loop(timestamp) {
+            update(timestamp);
             draw();
             requestAnimationFrame(loop);
         }
@@ -324,26 +333,34 @@
             }
 
             if (state === State.GAMEOVER) {
+                if (score > bestScore) {
+                    bestScore = score;
+                    saveProgress();
+                }
                 resetGame();
                 state = State.PLAYING;
                 return;
             }
 
-            if (state === State.PLAYING) {
-                let moved = false;
-                if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') moved = moveLeft();
-                if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') moved = moveRight();
-                if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') moved = moveUp();
-                if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') moved = moveDown();
-
-                if (moved) {
-                    spawnTile();
+            if (state === State.PLAYING && current) {
+                if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') {
+                    if (isValidPosition(current, -1, 0)) current.x--;
+                }
+                if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') {
+                    if (isValidPosition(current, 1, 0)) current.x++;
+                }
+                if (e.key === ' ') {
+                    e.preventDefault();
+                    while (isValidPosition(current, 0, 1)) {
+                        current.y++;
+                    }
+                    placeBlock();
                 }
             }
         });
 
         resetGame();
-        loop();
+        requestAnimationFrame(loop);
     </script>
 </body>
 </html>
