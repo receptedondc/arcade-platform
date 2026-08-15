@@ -41,10 +41,6 @@
         const State = { MENU: 0, PLAYING: 1, GAMEOVER: 2 };
         let state = State.MENU;
 
-        // Auto play
-        let autoPlay = false;
-        let autoPlayBtn = { x: 0, y: 0, w: 220, h: 44 };
-
         // Grid
         const GRID_SIZE = 20;
         let COLS = Math.floor(canvas.width / GRID_SIZE);
@@ -60,11 +56,6 @@
         let gameSpeed = 120; // ms per frame
         let lastUpdate = 0;
         let growing = false;
-
-        // Time tracking
-        let startTime = 0;
-        let elapsedTime = 0;
-        let bestTime = 0;
 
         // Colors
         const COLORS = {
@@ -281,19 +272,8 @@
                 ctx.fillStyle = '#fff';
                 ctx.font = 'bold 20px Courier New';
                 ctx.textAlign = 'left';
-                if (autoPlay) {
-                    ctx.fillText(`TIME: ${elapsedTime.toFixed(1)}s`, 20, 35);
-                    ctx.fillText(`BEST TIME: ${bestTime.toFixed(1)}s`, 20, 60);
-                    ctx.fillStyle = '#0f0';
-                    ctx.font = 'bold 16px Courier New';
-                    ctx.fillText('AUTO PLAY ON [A]', 20, 85);
-                } else {
-                    ctx.fillText(`SCORE: ${score}`, 20, 35);
-                    ctx.fillText(`BEST: ${highScore}`, 20, 60);
-                    ctx.fillStyle = '#666';
-                    ctx.font = 'bold 16px Courier New';
-                    ctx.fillText('AUTO PLAY OFF [A]', 20, 85);
-                }
+                ctx.fillText(`SCORE: ${score}`, 20, 35);
+                ctx.fillText(`BEST: ${highScore}`, 20, 60);
                 ctx.fillStyle = '#fff';
 
                 if (state === State.GAMEOVER) {
@@ -346,7 +326,7 @@
 
             ctx.fillStyle = '#444';
             ctx.font = '14px Courier New';
-            ctx.fillText('[ARROWS/WASD] Move  [A] Toggle Auto Play  [T] Suicide', canvas.width / 2, canvas.height / 2 + 265);
+            ctx.fillText('[ARROWS/WASD] Move  [T] Suicide', canvas.width / 2, canvas.height / 2 + 265);
         }
 
         function drawGameOver() {
@@ -472,15 +452,6 @@
             }
 
             if (state === State.PLAYING) {
-                if (e.key === 'a' || e.key === 'A') {
-                    autoPlay = !autoPlay;
-                    if (autoPlay) {
-                        startTime = Date.now();
-                        elapsedTime = 0;
-                    }
-                    return;
-                }
-
                 if (e.key === 't' || e.key === 'T') {
                     gameOver();
                     return;
