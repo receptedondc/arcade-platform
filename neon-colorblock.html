@@ -19,7 +19,7 @@
         canvas {
             display: block;
             border: 2px solid #333;
-            box-shadow: 0 0 30px rgba(0,255,255,0.2);
+            box-shadow: 0 0 40px rgba(0,255,255,0.35);
         }
     </style>
 </head>
@@ -29,24 +29,20 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        // Resize
         function resize() {
             canvas.width = Math.min(window.innerWidth - 40, 900);
-            canvas.height = Math.min(window.innerHeight - 40, 650);
+            canvas.height = Math.min(window.innerHeight - 40, 700);
         }
         window.addEventListener('resize', resize);
         resize();
 
-        // Game state
         const State = { MENU: 0, PLAYING: 1, GAMEOVER: 2 };
         let state = State.MENU;
 
-        // Grid
-        const GRID = 80;
+        const GRID = 90;
         let COLS = Math.floor(canvas.width / GRID);
         let ROWS = Math.floor(canvas.height / GRID);
 
-        // Colors
         const COLORS = [
             '#ff0040',
             '#00ff80',
@@ -59,23 +55,18 @@
         ];
         const COLOR_NAMES = ['RED','GREEN','BLUE','YELLOW','ORANGE','PURPLE','CYAN','PINK'];
 
-        // Player
         let player = { x: 0, y: 0 };
-
-        // Floor state
         let targetColor = 0;
         let floorTimer = 0;
-        const FLOOR_CHANGE_INTERVAL = 220;
+        const FLOOR_CHANGE_INTERVAL = 300;
         let floorColors = [];
+        let flashTimer = 0;
+        const FLASH_DURATION = 35;
 
-        // Score
         let score = 0;
         let highScore = 0;
-
-        // Particles
         let particles = [];
 
-        // Load saved data
         try {
             highScore = parseInt(localStorage.getItem('colorblock_highscore') || '0');
         } catch (e) {}
@@ -108,17 +99,18 @@
 
             targetColor = randomColor(-1);
             floorTimer = FLOOR_CHANGE_INTERVAL;
+            flashTimer = 0;
             score = 0;
             particles = [];
         }
 
         function spawnParticles(x, y, color) {
-            for (let i = 0; i < 10; i++) {
+            for (let i = 0; i < 12; i++) {
                 particles.push({
                     x: x * GRID + GRID / 2,
                     y: y * GRID + GRID / 2,
-                    vx: (Math.random() - 0.5) * 8,
-                    vy: (Math.random() - 0.5) * 8,
+                    vx: (Math.random() - 0.5) * 10,
+                    vy: (Math.random() - 0.5) * 10,
                     life: 1,
                     color: COLORS[color]
                 });
@@ -130,18 +122,18 @@
                 const p = particles[i];
                 p.x += p.vx;
                 p.y += p.vy;
-                p.life -= 0.04;
+                p.life -= 0.035;
                 if (p.life <= 0) particles.splice(i, 1);
             }
         }
 
         function drawParticles() {
             particles.forEach(p => {
-                ctx.globalAlpha = p.life;
+                ctx.globalAlpha = Math.max(0, p.life);
                 ctx.fillStyle = p.color;
                 ctx.shadowColor = p.color;
-                ctx.shadowBlur = 14;
-                ctx.fillRect(p.x - 4, p.y - 4, 8, 8);
+                ctx.shadowBlur = 18;
+                ctx.fillRect(p.x - 5, p.y - 5, 10, 10);
             });
             ctx.globalAlpha = 1;
             ctx.shadowBlur = 0;
@@ -150,6 +142,7 @@
         function changeTarget() {
             targetColor = randomColor(targetColor);
             floorTimer = FLOOR_CHANGE_INTERVAL;
+            flashTimer = FLASH_DURATION;
 
             const current = floorColors[player.y] ? floorColors[player.y][player.x] : -1;
             if (current !== targetColor) {
@@ -174,65 +167,76 @@
                 if (floorTimer <= 0) {
                     changeTarget();
                 }
+                if (flashTimer > 0) flashTimer--;
             }
             updateParticles();
         }
 
         function draw() {
-            // Clear
             ctx.fillStyle = '#050505';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Draw colored floor blocks
+            // Floor blocks
             for (let y = 0; y < ROWS; y++) {
                 for (let x = 0; x < COLS; x++) {
                     const c = floorColors[y][x];
+                    const isTarget = c === targetColor;
+                    let alpha = 0.35;
+
+                    if (flashTimer > 0) {
+                        alpha = isTarget ? 0.9 : 0.06;
+                    }
+
+                    ctx.globalAlpha = alpha;
                     ctx.fillStyle = COLORS[c];
-                    ctx.globalAlpha = 0.18;
-                    ctx.fillRect(x * GRID, y * GRID, GRID - 2, GRID - 2);
+                    ctx.shadowColor = COLORS[c];
+                    ctx.shadowBlur = isTarget ? 18 : 8;
+                    ctx.fillRect(x * GRID + 3, y * GRID + 3, GRID - 6, GRID - 6);
                 }
             }
             ctx.globalAlpha = 1;
+            ctx.shadowBlur = 0;
 
-            // Particles
             drawParticles();
 
             // Player
             ctx.shadowColor = '#ffffff';
-            ctx.shadowBlur = 24;
+            ctx.shadowBlur = 30;
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(
-                player.x * GRID + 10,
-                player.y * GRID + 10,
-                GRID - 20,
-                GRID - 20
+                player.x * GRID + 14,
+                player.y * GRID + 14,
+                GRID - 28,
+                GRID - 28
             );
             ctx.shadowBlur = 0;
 
-            // HUD
-            ctx.fillStyle = '#fff';
-            ctx.font = 'bold 20px Courier New';
-            ctx.textAlign = 'left';
-            ctx.fillText(`SCORE: ${score}`, 20, 30);
-            ctx.fillText(`BEST: ${highScore}`, 20, 55);
-
+            // Big target GUI top middle
+            const targetText = COLOR_NAMES[targetColor];
             ctx.fillStyle = COLORS[targetColor];
-            ctx.font = 'bold 18px Courier New';
-            ctx.fillText(`TARGET: ${COLOR_NAMES[targetColor]}`, 20, 85);
+            ctx.shadowColor = COLORS[targetColor];
+            ctx.shadowBlur = 25;
+            ctx.font = 'bold 52px Courier New';
+            ctx.textAlign = 'center';
+            ctx.fillText(targetText, canvas.width / 2, 75);
+            ctx.shadowBlur = 0;
 
-            const under = floorColors[player.y] ? floorColors[player.y][player.x] : -1;
-            ctx.fillStyle = COLORS[under];
-            ctx.fillText(`UNDER: ${COLOR_NAMES[under]}`, 20, 110);
-
-            // Timer bar
-            const barWidth = canvas.width - 40;
-            const barHeight = 10;
-            const barX = 20;
-            const barY = canvas.height - 24;
+            // Timer bar under target
+            const barWidth = Math.min(500, canvas.width - 60);
+            const barHeight = 14;
+            const barX = (canvas.width - barWidth) / 2;
+            const barY = 95;
             ctx.fillStyle = '#222';
             ctx.fillRect(barX, barY, barWidth, barHeight);
             ctx.fillStyle = COLORS[targetColor];
             ctx.fillRect(barX, barY, barWidth * (floorTimer / FLOOR_CHANGE_INTERVAL), barHeight);
+
+            // Score bottom left
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 20px Courier New';
+            ctx.textAlign = 'left';
+            ctx.fillText(`SCORE: ${score}`, 24, canvas.height - 24);
+            ctx.fillText(`BEST: ${highScore}`, 24, canvas.height - 50);
 
             if (state === State.MENU) drawMenu();
             else if (state === State.GAMEOVER) drawGameOver();
@@ -243,28 +247,28 @@
             ctx.font = 'bold 72px Courier New';
             ctx.textAlign = 'center';
             ctx.shadowColor = '#00ffff';
-            ctx.shadowBlur = 20;
-            ctx.fillText('NEON COLOR', canvas.width / 2, canvas.height / 2 - 90);
-            ctx.fillText('BLOCK', canvas.width / 2, canvas.height / 2 - 20);
+            ctx.shadowBlur = 22;
+            ctx.fillText('NEON COLOR', canvas.width / 2, canvas.height / 2 - 100);
+            ctx.fillText('BLOCK', canvas.width / 2, canvas.height / 2 - 30);
             ctx.shadowBlur = 0;
 
             ctx.fillStyle = '#fff';
             ctx.font = '22px Courier New';
-            ctx.fillText('Move to match the TARGET color', canvas.width / 2, canvas.height / 2 + 40);
-            ctx.fillText('Use WASD / ARROW KEYS', canvas.width / 2, canvas.height / 2 + 70);
-            ctx.fillText('Survive as long as possible', canvas.width / 2, canvas.height / 2 + 100);
+            ctx.fillText('Move to match the TARGET color', canvas.width / 2, canvas.height / 2 + 30);
+            ctx.fillText('Use WASD / ARROW KEYS', canvas.width / 2, canvas.height / 2 + 60);
+            ctx.fillText('Survive as long as possible', canvas.width / 2, canvas.height / 2 + 90);
 
             const time = Date.now() / 1000;
             const alpha = 0.5 + Math.sin(time * 3) * 0.5;
             ctx.globalAlpha = alpha;
             ctx.fillStyle = '#0ff';
             ctx.font = 'bold 22px Courier New';
-            ctx.fillText('PRESS ANY KEY TO START', canvas.width / 2, canvas.height / 2 + 160);
+            ctx.fillText('PRESS ANY KEY TO START', canvas.width / 2, canvas.height / 2 + 150);
             ctx.globalAlpha = 1;
 
             ctx.fillStyle = '#666';
             ctx.font = '16px Courier New';
-            ctx.fillText('ESC to return to Arcade', canvas.width / 2, canvas.height / 2 + 200);
+            ctx.fillText('ESC to return to Arcade', canvas.width / 2, canvas.height / 2 + 190);
         }
 
         function drawGameOver() {
@@ -275,7 +279,7 @@
             ctx.font = 'bold 64px Courier New';
             ctx.textAlign = 'center';
             ctx.shadowColor = '#f00';
-            ctx.shadowBlur = 20;
+            ctx.shadowBlur = 22;
             ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 30);
             ctx.shadowBlur = 0;
 
@@ -311,7 +315,6 @@
             requestAnimationFrame(loop);
         }
 
-        // Input
         window.addEventListener('keydown', e => {
             if (e.key === 'Escape') {
                 window.location.href = 'index.html';
@@ -349,7 +352,6 @@
             }
         });
 
-        // Start
         resetGame();
         loop();
     </script>
