@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arcade</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #050505;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .container {
+            text-align: center;
+            padding: 40px;
+        }
+        h1 {
+            font-size: 72px;
+            color: #00ffff;
+            text-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff;
+            margin-bottom: 10px;
+            letter-spacing: 8px;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 60px;
+            letter-spacing: 4px;
+        }
+        .games {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .game-card {
+            background: #111;
+            border: 2px solid #333;
+            border-radius: 12px;
+            padding: 30px;
+            width: 260px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            color: #fff;
+            display: block;
+        }
+        .game-card:hover {
+            border-color: #00ffff;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+            transform: translateY(-5px);
+        }
+        .game-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        .game-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #00ffff;
+        }
+        .game-desc {
+            font-size: 14px;
+            color: #888;
+            line-height: 1.5;
+        }
+        .game-tag {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 4px 12px;
+            background: #222;
+            border: 1px solid #444;
+            border-radius: 20px;
+            font-size: 11px;
+            color: #aaa;
+            letter-spacing: 1px;
+        }
+        .footer {
+            margin-top: 60px;
+            color: #444;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ARCADE</h1>
+        <div class="subtitle">SELECT A GAME</div>
+        
+        <div class="games">
+            <a href="neon-survivor.html" class="game-card">
+                <div class="game-icon">🎯</div>
+                <div class="game-title">NEON SURVIVOR</div>
+                <div class="game-desc">Survive waves of enemies in this fast-paced top-down shooter. Pick up weapons, deploy turrets, and defeat bosses.</div>
+                <div class="game-tag">SURVIVAL</div>
+            </a>
+            
+            <a href="neon-td.html" class="game-card">
+                <div class="game-icon">🏰</div>
+                <div class="game-title">NEON TOWER DEFENSE</div>
+                <div class="game-desc">Place towers, upgrade paths, and stop waves of creeps from reaching your base. Strategy meets neon.</div>
+                <div class="game-tag">TOWER DEFENSE</div>
+            </a>
+            
+            <a href="neon-snake.html" class="game-card">
+                <div class="game-icon">🐍</div>
+                <div class="game-title">NEON SNAKE</div>
+                <div class="game-desc">Classic snake reimagined with neon style. Eat to grow, avoid walls and yourself. How long can you survive?</div>
+                <div class="game-tag">ARCADE</div>
+            </a>
+        </div>
+        
+        <div class="footer">
+            MORE GAMES COMING SOON
+        </div>
+    </div>
+</body>
+</html>
