@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Merge</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #050505;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        canvas {
+            display: block;
+            border: 2px solid #333;
+            box-shadow: 0 0 40px rgba(0,255,255,0.35);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resize() {
+            canvas.width = Math.min(window.innerWidth - 40, 500);
+            canvas.height = Math.min(window.innerHeight - 40, 600);
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        const State = { MENU: 0, PLAYING: 1, GAMEOVER: 2 };
+        let state = State.MENU;
+
+        const GRID = 4;
+        let CELL = Math.min(canvas.width, canvas.height) / (GRID + 1);
+        let OFFSET_X = (canvas.width - CELL * GRID) / 2;
+        let OFFSET_Y = (canvas.height - CELL * GRID) / 2;
+
+        const COLORS = {
+            2: '#00ffff',
+            4: '#00ff80',
+            8: '#00aaff',
+            16: '#ffcc00',
+            32: '#ff5500',
+            64: '#aa00ff',
+            128: '#ff0088',
+            256: '#00ffcc',
+            512: '#ff0040',
+            1024: '#ffff00',
+            2048: '#ff0000'
+        };
+
+        let board = [];
+        let score = 0;
+        let bestScore = 0;
+
+        try {
+            bestScore = parseInt(localStorage.getItem('merge_best') || '0');
+        } catch (e) {}
+
+        function saveProgress() {
+            try {
+                localStorage.setItem('merge_best', bestScore.toString());
+            } catch (e) {}
+        }
+
+        function resetGame() {
+            board = Array(GRID).fill().map(() => Array(GRID).fill(0));
+            score = 0;
+            spawnTile();
+            spawnTile();
+        }
+
+        function spawnTile() {
+            const empty = [];
+            for (let y = 0; y < GRID; y++) {
+                for (let x = 0; x < GRID; x++) {
+                    if (board[y][x] === 0) empty.push({x, y});
+                }
+            }
+            if (empty.length === 0) return false;
+            const cell = empty[Math.floor(Math.random() * empty.length)];
+            board[cell.y][cell.x] = Math.random() < 0.9 ? 2 : 4;
+            return true;
+        }
+
+        function slide(row) {
+            let arr = row.filter(v => v !== 0);
+            let merged = Array(GRID).fill(false);
+            let scoreGain = 0;
+
+            for (let i = 0; i < arr.length - 1; i++) {
+                if (arr[i] !== 0 && arr[i] === arr[i + 1] && !merged[i]) {
+                    arr[i] *= 2;
+                    scoreGain += arr[i];
+                    arr[i + 1] = 0;
+                    merged[i] = true;
+                }
+            }
+
+            arr = arr.filter(v => v !== 0);
+            while (arr.length < GRID) arr.push(0);
+            return { row: arr, scoreGain };
+        }
+
+        function moveLeft() {
+            let moved = false;
+            let gain = 0;
+            for (let y = 0; y < GRID; y++) {
+                const result = slide(board[y]);
+                if (board[y].join(',') !== result.row.join(',')) moved = true;
+                board[y] = result.row;
+                gain += result.scoreGain;
+            }
+            score += gain;
+            return moved;
+        }
+
+        function moveRight() {
+            let moved = false;
+            let gain = 0;
+            for (let y = 0; y < GRID; y++) {
+                const reversed = [...board[y]].reverse();
+                const result = slide(reversed);
+                const row = result.row.reverse();
+                if (board[y].join(',') !== row.join(',')) moved = true;
+                board[y] = row;
+                gain += result.scoreGain;
+            }
+            score += gain;
+            return moved;
+        }
+
+        function moveUp() {
+            let moved = false;
+            let gain = 0;
+            for (let x = 0; x < GRID; x++) {
+                let col = [];
+                for (let y = 0; y < GRID; y++) col.push(board[y][x]);
+                const result = slide(col);
+                if (col.join(',') !== result.row.join(',')) moved = true;
+                for (let y = 0; y < GRID; y++) board[y][x] = result.row[y];
+                gain += result.scoreGain;
+            }
+            score += gain;
+            return moved;
+        }
+
+        function moveDown() {
+            let moved = false;
+            let gain = 0;
+            for (let x = 0; x < GRID; x++) {
+                let col = [];
+                for (let y = GRID - 1; y >= 0; y--) col.push(board[y][x]);
+                const result = slide(col);
+                const reversed = result.row.reverse();
+                const orig = [];
+                for (let y = GRID - 1; y >= 0; y--) orig.push(reversed[y]);
+                if (col.join(',') !== result.row.join(',')) moved = true;
+                for (let y = 0; y < GRID; y++) board[y][x] = reversed[y];
+                gain += result.scoreGain;
+            }
+            score += gain;
+            return moved;
+        }
+
+        function canMove() {
+            for (let y = 0; y < GRID; y++) {
+                for (let x = 0; x < GRID; x++) {
+                    if (board[y][x] === 0) return true;
+                    if (x < GRID - 1 && board[y][x] === board[y][x + 1]) return true;
+                    if (y < GRID - 1 && board[y][x] === board[y + 1][x]) return true;
+                }
+            }
+            return false;
+        }
+
+        function gameOver() {
+            state = State.GAMEOVER;
+            if (score > bestScore) {
+                bestScore = score;
+                saveProgress();
+            }
+        }
+
+        function update() {
+            if (state === State.PLAYING && !canMove()) {
+                gameOver();
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Grid background
+            for (let y = 0; y < GRID; y++) {
+                for (let x = 0; x < GRID; x++) {
+                    ctx.fillStyle = '#111';
+                    ctx.fillRect(OFFSET_X + x * CELL, OFFSET_Y + y * CELL, CELL - 4, CELL - 4);
+                }
+            }
+
+            // Tiles
+            for (let y = 0; y < GRID; y++) {
+                for (let x = 0; x < GRID; x++) {
+                    const val = board[y][x];
+                    if (val === 0) continue;
+                    const color = COLORS[val] || '#fff';
+                    ctx.shadowColor = color;
+                    ctx.shadowBlur = 16;
+                    ctx.fillStyle = color;
+                    ctx.fillRect(OFFSET_X + x * CELL + 4, OFFSET_Y + y * CELL + 4, CELL - 8, CELL - 8);
+                    ctx.shadowBlur = 0;
+                    ctx.fillStyle = '#000';
+                    ctx.font = `bold ${Math.floor(CELL * 0.4)}px Courier New`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(val, OFFSET_X + x * CELL + CELL / 2, OFFSET_Y + y * CELL + CELL / 2);
+                }
+            }
+
+            // HUD
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 20px Courier New';
+            ctx.textAlign = 'left';
+            ctx.fillText(`SCORE: ${score}`, 24, 35);
+            ctx.fillText(`BEST: ${bestScore}`, 24, 60);
+
+            if (state === State.MENU) drawMenu();
+            else if (state === State.GAMEOVER) drawGameOver();
+        }
+
+        function drawMenu() {
+            ctx.fillStyle = '#00ffff';
+            ctx.font = 'bold 56px Courier New';
+            ctx.textAlign = 'center';
+            ctx.shadowColor = '#00ffff';
+            ctx.shadowBlur = 20;
+            ctx.fillText('NEON MERGE', canvas.width / 2, canvas.height / 2 - 80);
+            ctx.shadowBlur = 0;
+
+            ctx.fillStyle = '#fff';
+            ctx.font = '22px Courier New';
+            ctx.fillText('Use Arrow Keys or WASD', canvas.width / 2, canvas.height / 2 - 10);
+            ctx.fillText('Merge tiles to reach 2048', canvas.width / 2, canvas.height / 2 + 20);
+            ctx.fillText('Same-number tiles combine', canvas.width / 2, canvas.height / 2 + 50);
+
+            const time = Date.now() / 1000;
+            const alpha = 0.5 + Math.sin(time * 3) * 0.5;
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = '#0ff';
+            ctx.font = 'bold 22px Courier New';
+            ctx.fillText('PRESS ANY KEY TO START', canvas.width / 2, canvas.height / 2 + 110);
+            ctx.globalAlpha = 1;
+
+            ctx.fillStyle = '#666';
+            ctx.font = '16px Courier New';
+            ctx.fillText('ESC to return to Arcade', canvas.width / 2, canvas.height / 2 + 150);
+        }
+
+        function drawGameOver() {
+            ctx.fillStyle = 'rgba(0,0,0,0.75)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#f00';
+            ctx.font = 'bold 56px Courier New';
+            ctx.textAlign = 'center';
+            ctx.shadowColor = '#f00';
+            ctx.shadowBlur = 20;
+            ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 30);
+            ctx.shadowBlur = 0;
+
+            ctx.fillStyle = '#fff';
+            ctx.font = '28px Courier New';
+            ctx.fillText(`Score: ${score}`, canvas.width / 2, canvas.height / 2 + 20);
+
+            if (score > 0 && score >= bestScore) {
+                ctx.fillStyle = '#ff0';
+                ctx.fillText('NEW BEST!', canvas.width / 2, canvas.height / 2 + 55);
+            } else {
+                ctx.fillStyle = '#aaa';
+                ctx.font = '20px Courier New';
+                ctx.fillText(`Best: ${bestScore}`, canvas.width / 2, canvas.height / 2 + 55);
+            }
+
+            const time = Date.now() / 1000;
+            const alpha = 0.5 + Math.sin(time * 3) * 0.5;
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = '#0ff';
+            ctx.font = 'bold 20px Courier New';
+            ctx.fillText('PRESS ANY KEY TO RETRY', canvas.width / 2, canvas.height / 2 + 100);
+            ctx.globalAlpha = 1;
+
+            ctx.fillStyle = '#666';
+            ctx.font = '16px Courier New';
+            ctx.fillText('ESC to return to Arcade', canvas.width / 2, canvas.height / 2 + 130);
+        }
+
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        window.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            if (state === State.MENU) {
+                resetGame();
+                state = State.PLAYING;
+                return;
+            }
+
+            if (state === State.GAMEOVER) {
+                resetGame();
+                state = State.PLAYING;
+                return;
+            }
+
+            if (state === State.PLAYING) {
+                let moved = false;
+                if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') moved = moveLeft();
+                if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') moved = moveRight();
+                if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') moved = moveUp();
+                if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') moved = moveDown();
+
+                if (moved) {
+                    spawnTile();
+                }
+            }
+        });
+
+        resetGame();
+        loop();
+    </script>
+</body>
+</html>
