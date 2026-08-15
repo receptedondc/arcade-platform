@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Snake</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #050505;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        canvas {
+            display: block;
+            border: 2px solid #333;
+            box-shadow: 0 0 30px rgba(0,255,255,0.2);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Resize
+        function resize() {
+            canvas.width = Math.min(window.innerWidth - 40, 800);
+            canvas.height = Math.min(window.innerHeight - 40, 600);
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Game state
+        const State = { MENU: 0, PLAYING: 1, GAMEOVER: 2 };
+        let state = State.MENU;
+
+        // Auto play
+        let autoPlay = false;
+        let autoPlayBtn = { x: 0, y: 0, w: 220, h: 44 };
+
+        // Grid
+        const GRID_SIZE = 20;
+        let COLS = Math.floor(canvas.width / GRID_SIZE);
+        let ROWS = Math.floor(canvas.height / GRID_SIZE);
+
+        // Snake
+        let snake = [];
+        let direction = { x: 1, y: 0 };
+        let nextDirection = { x: 1, y: 0 };
+        let food = { x: 0, y: 0 };
+        let score = 0;
+        let highScore = 0;
+        let gameSpeed = 120; // ms per frame
+        let lastUpdate = 0;
+        let growing = false;
+
+        // Time tracking
+        let startTime = 0;
+        let elapsedTime = 0;
+        let bestTime = 0;
+
+        // Colors
+        const COLORS = {
+            snake: '#00ffff',
+            snakeHead: '#00ffff',
+            food: '#ff00ff',
+            grid: '#111',
+            bg: '#050505'
+        };
+
+        // Load saved data
+        try {
+            highScore = parseInt(localStorage.getItem('snake_highscore') || '0');
+            bestTime = parseFloat(localStorage.getItem('snake_besttime') || '0');
+        } catch (e) {}
+
+        function saveProgress() {
+            try {
+                localStorage.setItem('snake_highscore', highScore.toString());
+                localStorage.setItem('snake_besttime', bestTime.toString());
+            } catch (e) {}
+        }
+
+        function resetGame() {
+            const startX = Math.floor(COLS / 2);
+            const startY = Math.floor(ROWS / 2);
+            snake = [
+                { x: startX, y: startY },
+                { x: startX, y: startY + 1 },
+                { x: startX, y: startY + 2 }
+            ];
+            direction = { x: 0, y: -1 };
+            nextDirection = { x: 0, y: -1 };
+            score = 0;
+            gameSpeed = 130;
+            growing = false;
+            startTime = Date.now();
+            elapsedTime = 0;
+            spawnFood();
+        }
+
+        function spawnFood() {
+            let valid = false;
+            while (!valid) {
+                food.x = Math.floor(Math.random() * COLS);
+                food.y = Math.floor(Math.random() * ROWS);
+                valid = true;
+                for (let seg of snake) {
+                    if (seg.x === food.x && seg.y === food.y) {
+                        valid = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        function isSafe(x, y) {
+            if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return false;
+            for (let seg of snake) {
+                if (seg.x === x && seg.y === y) return false;
+            }
+            return true;
+        }
+
+        function autoPlayMove() {
+            const head = snake[0];
+            const moves = [
+                { x: 0, y: -1 },
+                { x: 0, y: 1 },
+                { x: -1, y: 0 },
+                { x: 1, y: 0 }
+            ];
+
+            // Filter out reverse moves
+            const candidates = moves.filter(m => {
+                if (m.x === -direction.x && m.y === -direction.y) return false;
+                return isSafe(head.x + m.x, head.y + m.y);
+            });
+
+            if (candidates.length === 0) return;
+
+            // Score each candidate by: distance to food, and number of safe exits after the move
+            let best = null;
+            let bestScore = -Infinity;
+            for (const m of candidates) {
+                const nx = head.x + m.x;
+                const ny = head.y + m.y;
+                const distToFood = Math.hypot(nx - food.x, ny - food.y);
+
+                // Count safe neighboring squares after this move
+                let safeExits = 0;
+                for (const om of moves) {
+                    if (om.x === -m.x && om.y === -m.y) continue; // reverse
+                    const ex = nx + om.x;
+                    const ey = ny + om.y;
+                    if (isSafe(ex, ey)) safeExits++;
+                }
+
+                // Prefer closer to food, but heavily prefer moves with more safe exits
+                const score = -distToFood + safeExits * 50;
+                if (score > bestScore) {
+                    bestScore = score;
+                    best = m;
+                }
+            }
+
+            if (best) {
+                nextDirection = best;
+            } else {
+                nextDirection = candidates[0];
+            }
+        }
+
+        function update() {
+            if (state !== State.PLAYING) return;
+
+            if (autoPlay) {
+                autoPlayMove();
+            }
+
+            direction = nextDirection;
+
+            const head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
+
+            // Wall collision
+            if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
+                gameOver();
+                return;
+            }
+
+            // Self collision
+            for (let seg of snake) {
+                if (seg.x === head.x && seg.y === head.y) {
+                    gameOver();
+                    return;
+                }
+            }
+
+            snake.unshift(head);
+
+            // Food collision
+            if (head.x === food.x && head.y === food.y) {
+                if (!autoPlay) {
+                    score += 10;
+                }
+                growing = true;
+                spawnFood();
+                // Speed up slightly
+                gameSpeed = Math.max(60, gameSpeed - 2);
+            } else {
+                snake.pop();
+                growing = false;
+            }
+
+            if (autoPlay) {
+                elapsedTime = (Date.now() - startTime) / 1000;
+            }
+        }
+
+        function draw() {
+            // Clear
+            ctx.fillStyle = COLORS.bg;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Grid
+            ctx.strokeStyle = COLORS.grid;
+            ctx.lineWidth = 1;
+            for (let x = 0; x <= canvas.width; x += GRID_SIZE) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= canvas.height; y += GRID_SIZE) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+
+            if (state === State.MENU) {
+                drawMenu();
+            } else if (state === State.PLAYING || state === State.GAMEOVER) {
+                // Food
+                ctx.shadowColor = COLORS.food;
+                ctx.shadowBlur = 15;
+                ctx.fillStyle = COLORS.food;
+                ctx.fillRect(
+                    food.x * GRID_SIZE + 3,
+                    food.y * GRID_SIZE + 3,
+                    GRID_SIZE - 6,
+                    GRID_SIZE - 6
+                );
+                ctx.shadowBlur = 0;
+
+                // Snake
+                snake.forEach((seg, i) => {
+                    const alpha = 1 - (i / snake.length) * 0.5;
+                    ctx.shadowColor = COLORS.snake;
+                    ctx.shadowBlur = 10;
+                    ctx.fillStyle = i === 0 ? COLORS.snakeHead : COLORS.snake;
+                    ctx.globalAlpha = alpha;
+                    ctx.fillRect(
+                        seg.x * GRID_SIZE + 1,
+                        seg.y * GRID_SIZE + 1,
+                        GRID_SIZE - 2,
+                        GRID_SIZE - 2
+                    );
+                });
+                ctx.globalAlpha = 1;
+                ctx.shadowBlur = 0;
+
+                // HUD
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 20px Courier New';
+                ctx.textAlign = 'left';
+                if (autoPlay) {
+                    ctx.fillText(`TIME: ${elapsedTime.toFixed(1)}s`, 20, 35);
+                    ctx.fillText(`BEST TIME: ${bestTime.toFixed(1)}s`, 20, 60);
+                    ctx.fillStyle = '#0f0';
+                    ctx.font = 'bold 16px Courier New';
+                    ctx.fillText('AUTO PLAY ON [A]', 20, 85);
+                } else {
+                    ctx.fillText(`SCORE: ${score}`, 20, 35);
+                    ctx.fillText(`BEST: ${highScore}`, 20, 60);
+                    ctx.fillStyle = '#666';
+                    ctx.font = 'bold 16px Courier New';
+                    ctx.fillText('AUTO PLAY OFF [A]', 20, 85);
+                }
+                ctx.fillStyle = '#fff';
+
+                if (state === State.GAMEOVER) {
+                    drawGameOver();
+                }
+            }
+        }
+
+        function drawMenu() {
+            ctx.fillStyle = '#ff00ff';
+            ctx.font = 'bold 72px Courier New';
+            ctx.textAlign = 'center';
+            ctx.shadowColor = '#ff00ff';
+            ctx.shadowBlur = 20;
+            ctx.fillText('NEON SNAKE', canvas.width / 2, canvas.height / 2 - 100);
+            ctx.shadowBlur = 0;
+
+            ctx.fillStyle = '#fff';
+            ctx.font = '24px Courier New';
+            ctx.fillText('Use ARROW KEYS or WASD to move', canvas.width / 2, canvas.height / 2 - 30);
+            ctx.fillText('Eat the pink squares to grow', canvas.width / 2, canvas.height / 2);
+            ctx.fillText("Don't hit walls or yourself", canvas.width / 2, canvas.height / 2 + 30);
+
+            // Auto play toggle button
+            autoPlayBtn.x = canvas.width / 2 - autoPlayBtn.w / 2;
+            autoPlayBtn.y = canvas.height / 2 + 80;
+            ctx.fillStyle = autoPlay ? '#0a3a0a' : '#1a1a1a';
+            ctx.strokeStyle = autoPlay ? '#00ff00' : '#444';
+            ctx.lineWidth = 2;
+            ctx.fillRect(autoPlayBtn.x, autoPlayBtn.y, autoPlayBtn.w, autoPlayBtn.h);
+            ctx.strokeRect(autoPlayBtn.x, autoPlayBtn.y, autoPlayBtn.w, autoPlayBtn.h);
+            ctx.fillStyle = autoPlay ? '#00ff00' : '#aaa';
+            ctx.font = 'bold 18px Courier New';
+            ctx.textAlign = 'center';
+            ctx.fillText(autoPlay ? 'AUTO PLAY: ON' : 'AUTO PLAY: OFF', canvas.width / 2, autoPlayBtn.y + 28);
+
+            const time = Date.now() / 1000;
+            const alpha = 0.5 + Math.sin(time * 3) * 0.5;
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = '#0ff';
+            ctx.font = 'bold 22px Courier New';
+            ctx.fillText('PRESS ANY KEY TO START', canvas.width / 2, canvas.height / 2 + 150);
+            ctx.globalAlpha = 1;
+
+            ctx.fillStyle = '#666';
+            ctx.font = '16px Courier New';
+            ctx.fillText(`High Score: ${highScore}`, canvas.width / 2, canvas.height / 2 + 190);
+            ctx.fillText(`Best Time: ${bestTime.toFixed(1)}s`, canvas.width / 2, canvas.height / 2 + 215);
+            ctx.fillText('ESC to return to Arcade', canvas.width / 2, canvas.height / 2 + 240);
+
+            ctx.fillStyle = '#444';
+            ctx.font = '14px Courier New';
+            ctx.fillText('[ARROWS/WASD] Move  [A] Toggle Auto Play  [T] Suicide', canvas.width / 2, canvas.height / 2 + 265);
+        }
+
+        function drawGameOver() {
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#f00';
+            ctx.font = 'bold 64px Courier New';
+            ctx.textAlign = 'center';
+            ctx.shadowColor = '#f00';
+            ctx.shadowBlur = 20;
+            ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 40);
+            ctx.shadowBlur = 0;
+
+            if (autoPlay) {
+                ctx.fillStyle = '#fff';
+                ctx.font = '28px Courier New';
+                ctx.fillText(`Time: ${elapsedTime.toFixed(1)}s`, canvas.width / 2, canvas.height / 2 + 10);
+
+                if (elapsedTime > bestTime) {
+                    bestTime = elapsedTime;
+                    saveProgress();
+                    ctx.fillStyle = '#ff0';
+                    ctx.font = 'bold 22px Courier New';
+                    ctx.fillText('NEW BEST TIME!', canvas.width / 2, canvas.height / 2 + 45);
+                } else {
+                    ctx.fillStyle = '#aaa';
+                    ctx.font = '20px Courier New';
+                    ctx.fillText(`Best Time: ${bestTime.toFixed(1)}s`, canvas.width / 2, canvas.height / 2 + 45);
+                }
+            } else {
+                ctx.fillStyle = '#fff';
+                ctx.font = '28px Courier New';
+                ctx.fillText(`Score: ${score}`, canvas.width / 2, canvas.height / 2 + 10);
+
+                if (score > highScore) {
+                    highScore = score;
+                    saveProgress();
+                    ctx.fillStyle = '#ff0';
+                    ctx.fillText('NEW HIGH SCORE!', canvas.width / 2, canvas.height / 2 + 45);
+                } else {
+                    ctx.fillStyle = '#aaa';
+                    ctx.font = '20px Courier New';
+                    ctx.fillText(`Best: ${highScore}`, canvas.width / 2, canvas.height / 2 + 45);
+                }
+            }
+
+            // Auto Play toggle button
+            autoPlayBtn.x = canvas.width / 2 - autoPlayBtn.w / 2;
+            autoPlayBtn.y = canvas.height / 2 + 70;
+            ctx.fillStyle = autoPlay ? '#0a3a0a' : '#1a1a1a';
+            ctx.strokeStyle = autoPlay ? '#00ff00' : '#444';
+            ctx.lineWidth = 2;
+            ctx.fillRect(autoPlayBtn.x, autoPlayBtn.y, autoPlayBtn.w, autoPlayBtn.h);
+            ctx.strokeRect(autoPlayBtn.x, autoPlayBtn.y, autoPlayBtn.w, autoPlayBtn.h);
+            ctx.fillStyle = autoPlay ? '#00ff00' : '#aaa';
+            ctx.font = 'bold 18px Courier New';
+            ctx.textAlign = 'center';
+            ctx.fillText(autoPlay ? 'AUTO PLAY: ON' : 'AUTO PLAY: OFF', canvas.width / 2, autoPlayBtn.y + 28);
+
+            const time = Date.now() / 1000;
+            const alpha = 0.5 + Math.sin(time * 3) * 0.5;
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = '#0ff';
+            ctx.font = 'bold 20px Courier New';
+            ctx.fillText('PRESS ANY KEY TO RETRY', canvas.width / 2, canvas.height / 2 + 130);
+            ctx.globalAlpha = 1;
+
+            ctx.fillStyle = '#666';
+            ctx.font = '16px Courier New';
+            ctx.fillText('ESC to return to Arcade', canvas.width / 2, canvas.height / 2 + 160);
+            ctx.fillText('T to Suicide', canvas.width / 2, canvas.height / 2 + 180);
+        }
+
+        function gameOver() {
+            state = State.GAMEOVER;
+            if (autoPlay) {
+                if (elapsedTime > bestTime) {
+                    bestTime = elapsedTime;
+                    saveProgress();
+                }
+            } else {
+                if (score > highScore) {
+                    highScore = score;
+                    saveProgress();
+                }
+            }
+        }
+
+        function loop(timestamp) {
+            if (state === State.PLAYING) {
+                if (timestamp - lastUpdate >= gameSpeed) {
+                    update();
+                    lastUpdate = timestamp;
+                }
+            }
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        function isOnAutoPlayBtn(mx, my) {
+            return mx >= autoPlayBtn.x && mx <= autoPlayBtn.x + autoPlayBtn.w &&
+                   my >= autoPlayBtn.y && my <= autoPlayBtn.y + autoPlayBtn.h;
+        }
+
+        // Input
+        window.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                window.location.href = 'arcade.html';
+                return;
+            }
+
+            if (state === State.MENU) {
+                state = State.PLAYING;
+                resetGame();
+                return;
+            }
+
+            if (state === State.GAMEOVER) {
+                state = State.PLAYING;
+                resetGame();
+                return;
+            }
+
+            if (state === State.PLAYING) {
+                if (e.key === 'a' || e.key === 'A') {
+                    autoPlay = !autoPlay;
+                    if (autoPlay) {
+                        startTime = Date.now();
+                        elapsedTime = 0;
+                    }
+                    return;
+                }
+
+                if (e.key === 't' || e.key === 'T') {
+                    gameOver();
+                    return;
+                }
+
+                const keyMap = {
+                    'ArrowUp': { x: 0, y: -1 },
+                    'ArrowDown': { x: 0, y: 1 },
+                    'ArrowLeft': { x: -1, y: 0 },
+                    'ArrowRight': { x: 1, y: 0 },
+                    'w': { x: 0, y: -1 },
+                    's': { x: 0, y: 1 },
+                    'd': { x: -1, y: 0 },
+                    'W': { x: 0, y: -1 },
+                    'S': { x: 0, y: 1 },
+                    'D': { x: 1, y: 0 }
+                };
+
+                const newDir = keyMap[e.key];
+                if (newDir) {
+                    // Prevent reversing
+                    if (newDir.x !== -direction.x || newDir.y !== -direction.y) {
+                        nextDirection = newDir;
+                    }
+                }
+            }
+        });
+
+        canvas.addEventListener('mousedown', e => {
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+
+            if (state === State.MENU) {
+                if (isOnAutoPlayBtn(mx, my)) {
+                    autoPlay = !autoPlay;
+                    return;
+                }
+                state = State.PLAYING;
+                resetGame();
+            } else if (state === State.GAMEOVER) {
+                if (isOnAutoPlayBtn(mx, my)) {
+                    autoPlay = !autoPlay;
+                    return;
+                }
+                state = State.PLAYING;
+                resetGame();
+            }
+        });
+
+        // Start
+        resetGame();
+        requestAnimationFrame(loop);
+    </script>
+</body>
+</html>
