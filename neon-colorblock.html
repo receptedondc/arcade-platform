@@ -60,8 +60,6 @@
         let floorTimer = 0;
         const FLOOR_CHANGE_INTERVAL = 260;
         let floorColors = [];
-        let flashTimer = 0;
-        const FLASH_DURATION = 40;
 
         let score = 0;
         let highScore = 0;
@@ -99,7 +97,6 @@
 
             targetColor = randomColor(-1);
             floorTimer = FLOOR_CHANGE_INTERVAL;
-            flashTimer = 0;
             score = 0;
             particles = [];
         }
@@ -142,7 +139,6 @@
         function changeTarget() {
             targetColor = randomColor(targetColor);
             floorTimer = FLOOR_CHANGE_INTERVAL;
-            flashTimer = FLASH_DURATION;
         }
 
         function gameOver() {
@@ -159,7 +155,6 @@
                 if (floorTimer <= 0) {
                     gameOver();
                 }
-                if (flashTimer > 0) flashTimer--;
             }
             updateParticles();
         }
@@ -168,24 +163,15 @@
             ctx.fillStyle = '#050505';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Floor blocks
+            // Floor blocks - uniform brightness, no target highlight
             for (let y = 0; y < ROWS; y++) {
                 for (let x = 0; x < COLS; x++) {
                     const c = floorColors[y][x];
-                    const isTarget = c === targetColor;
-                    const show = flashTimer > 0 ? isTarget : true;
-
-                    if (!show) {
-                        ctx.fillStyle = '#111';
-                        ctx.globalAlpha = 0.35;
-                        ctx.fillRect(x * GRID + 3, y * GRID + 3, GRID - 6, GRID - 6);
-                    } else {
-                        ctx.fillStyle = COLORS[c];
-                        ctx.globalAlpha = isTarget ? 0.95 : 0.18;
-                        ctx.shadowColor = COLORS[c];
-                        ctx.shadowBlur = isTarget ? 22 : 10;
-                        ctx.fillRect(x * GRID + 3, y * GRID + 3, GRID - 6, GRID - 6);
-                    }
+                    ctx.fillStyle = COLORS[c];
+                    ctx.globalAlpha = 0.8;
+                    ctx.shadowColor = COLORS[c];
+                    ctx.shadowBlur = 10;
+                    ctx.fillRect(x * GRID + 3, y * GRID + 3, GRID - 6, GRID - 6);
                 }
             }
             ctx.globalAlpha = 1;
@@ -250,8 +236,8 @@
             ctx.font = '22px Courier New';
             ctx.fillText('Move to match the TARGET color', canvas.width / 2, canvas.height / 2 + 30);
             ctx.fillText('Use WASD / ARROW KEYS', canvas.width / 2, canvas.height / 2 + 60);
-            ctx.fillText('Only target blocks stay visible', canvas.width / 2, canvas.height / 2 + 90);
-            ctx.fillText('after each match', canvas.width / 2, canvas.height / 2 + 120);
+            ctx.fillText('Step on wrong color = death', canvas.width / 2, canvas.height / 2 + 90);
+            ctx.fillText('Timer running out = death', canvas.width / 2, canvas.height / 2 + 120);
 
             const time = Date.now() / 1000;
             const alpha = 0.5 + Math.sin(time * 3) * 0.5;
