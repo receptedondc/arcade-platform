@@ -60,6 +60,7 @@
         let floorTimer = 0;
         const FLOOR_CHANGE_INTERVAL = 260;
         let floorColors = [];
+        let hideWrong = false;
 
         let score = 0;
         let highScore = 0;
@@ -97,6 +98,7 @@
 
             targetColor = randomColor(-1);
             floorTimer = FLOOR_CHANGE_INTERVAL;
+            hideWrong = false;
             score = 0;
             particles = [];
         }
@@ -136,9 +138,17 @@
             ctx.shadowBlur = 0;
         }
 
-        function changeTarget() {
+        function nextRound() {
             targetColor = randomColor(targetColor);
             floorTimer = FLOOR_CHANGE_INTERVAL;
+            hideWrong = false;
+
+            // Optionally reshuffle floor here if you want the board to change
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    floorColors[y][x] = Math.floor(Math.random() * COLORS.length);
+                }
+            }
         }
 
         function gameOver() {
@@ -163,15 +173,23 @@
             ctx.fillStyle = '#050505';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Floor blocks - uniform brightness, no target highlight
+            // Floor blocks
             for (let y = 0; y < ROWS; y++) {
                 for (let x = 0; x < COLS; x++) {
                     const c = floorColors[y][x];
-                    ctx.fillStyle = COLORS[c];
-                    ctx.globalAlpha = 0.8;
-                    ctx.shadowColor = COLORS[c];
-                    ctx.shadowBlur = 10;
-                    ctx.fillRect(x * GRID + 3, y * GRID + 3, GRID - 6, GRID - 6);
+                    const isTarget = c === targetColor;
+
+                    if (hideWrong && !isTarget) {
+                        ctx.fillStyle = '#111';
+                        ctx.globalAlpha = 0.35;
+                        ctx.fillRect(x * GRID + 3, y * GRID + 3, GRID - 6, GRID - 6);
+                    } else {
+                        ctx.fillStyle = COLORS[c];
+                        ctx.globalAlpha = 0.8;
+                        ctx.shadowColor = COLORS[c];
+                        ctx.shadowBlur = 10;
+                        ctx.fillRect(x * GRID + 3, y * GRID + 3, GRID - 6, GRID - 6);
+                    }
                 }
             }
             ctx.globalAlpha = 1;
@@ -333,7 +351,7 @@
                         if (current === targetColor) {
                             score++;
                             spawnParticles(player.x, player.y, targetColor);
-                            changeTarget();
+                            nextRound();
                         } else {
                             gameOver();
                         }
