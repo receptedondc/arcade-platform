@@ -60,7 +60,6 @@
         let floorTimer = 0;
         const FLOOR_CHANGE_INTERVAL = 260;
         let floorColors = [];
-        let hideWrong = false;
 
         let score = 0;
         let highScore = 0;
@@ -98,7 +97,6 @@
 
             targetColor = randomColor(-1);
             floorTimer = FLOOR_CHANGE_INTERVAL;
-            hideWrong = false;
             score = 0;
             particles = [];
         }
@@ -141,9 +139,7 @@
         function nextRound() {
             targetColor = randomColor(targetColor);
             floorTimer = FLOOR_CHANGE_INTERVAL;
-            hideWrong = false;
 
-            // Optionally reshuffle floor here if you want the board to change
             for (let y = 0; y < ROWS; y++) {
                 for (let x = 0; x < COLS; x++) {
                     floorColors[y][x] = Math.floor(Math.random() * COLORS.length);
@@ -163,7 +159,14 @@
             if (state === State.PLAYING) {
                 floorTimer--;
                 if (floorTimer <= 0) {
-                    gameOver();
+                    const current = floorColors[player.y][player.x];
+                    if (current === targetColor) {
+                        score++;
+                        spawnParticles(player.x, player.y, targetColor);
+                        nextRound();
+                    } else {
+                        gameOver();
+                    }
                 }
             }
             updateParticles();
@@ -173,23 +176,14 @@
             ctx.fillStyle = '#050505';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Floor blocks
             for (let y = 0; y < ROWS; y++) {
                 for (let x = 0; x < COLS; x++) {
                     const c = floorColors[y][x];
-                    const isTarget = c === targetColor;
-
-                    if (hideWrong && !isTarget) {
-                        ctx.fillStyle = '#111';
-                        ctx.globalAlpha = 0.35;
-                        ctx.fillRect(x * GRID + 3, y * GRID + 3, GRID - 6, GRID - 6);
-                    } else {
-                        ctx.fillStyle = COLORS[c];
-                        ctx.globalAlpha = 0.8;
-                        ctx.shadowColor = COLORS[c];
-                        ctx.shadowBlur = 10;
-                        ctx.fillRect(x * GRID + 3, y * GRID + 3, GRID - 6, GRID - 6);
-                    }
+                    ctx.fillStyle = COLORS[c];
+                    ctx.globalAlpha = 0.8;
+                    ctx.shadowColor = COLORS[c];
+                    ctx.shadowBlur = 10;
+                    ctx.fillRect(x * GRID + 3, y * GRID + 3, GRID - 6, GRID - 6);
                 }
             }
             ctx.globalAlpha = 1;
@@ -197,7 +191,6 @@
 
             drawParticles();
 
-            // Player
             ctx.shadowColor = '#ffffff';
             ctx.shadowBlur = 34;
             ctx.fillStyle = '#ffffff';
@@ -209,7 +202,6 @@
             );
             ctx.shadowBlur = 0;
 
-            // Big target GUI top middle
             const targetText = COLOR_NAMES[targetColor];
             ctx.fillStyle = COLORS[targetColor];
             ctx.shadowColor = COLORS[targetColor];
@@ -219,7 +211,6 @@
             ctx.fillText(targetText, canvas.width / 2, 78);
             ctx.shadowBlur = 0;
 
-            // Timer bar under target
             const barWidth = Math.min(520, canvas.width - 60);
             const barHeight = 16;
             const barX = (canvas.width - barWidth) / 2;
@@ -229,7 +220,6 @@
             ctx.fillStyle = COLORS[targetColor];
             ctx.fillRect(barX, barY, barWidth * (floorTimer / FLOOR_CHANGE_INTERVAL), barHeight);
 
-            // Score bottom left
             ctx.fillStyle = '#fff';
             ctx.font = 'bold 22px Courier New';
             ctx.textAlign = 'left';
@@ -254,8 +244,8 @@
             ctx.font = '22px Courier New';
             ctx.fillText('Move to match the TARGET color', canvas.width / 2, canvas.height / 2 + 30);
             ctx.fillText('Use WASD / ARROW KEYS', canvas.width / 2, canvas.height / 2 + 60);
-            ctx.fillText('Step on wrong color = death', canvas.width / 2, canvas.height / 2 + 90);
-            ctx.fillText('Timer running out = death', canvas.width / 2, canvas.height / 2 + 120);
+            ctx.fillText('Wrong-color moves are allowed', canvas.width / 2, canvas.height / 2 + 90);
+            ctx.fillText('Timer expiration on wrong color = death', canvas.width / 2, canvas.height / 2 + 120);
 
             const time = Date.now() / 1000;
             const alpha = 0.5 + Math.sin(time * 3) * 0.5;
@@ -346,15 +336,6 @@
                     if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS) {
                         player.x = nx;
                         player.y = ny;
-
-                        const current = floorColors[player.y][player.x];
-                        if (current === targetColor) {
-                            score++;
-                            spawnParticles(player.x, player.y, targetColor);
-                            nextRound();
-                        } else {
-                            gameOver();
-                        }
                     }
                 }
             }
