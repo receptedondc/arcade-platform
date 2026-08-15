@@ -15,6 +15,7 @@
             align-items: center;
             justify-content: center;
             min-height: 100vh;
+            position: relative;
         }
         .container {
             text-align: center;
@@ -87,9 +88,28 @@
             color: #444;
             font-size: 12px;
         }
+        .discord-btn {
+            position: absolute;
+            top: 18px;
+            right: 18px;
+            background: #111;
+            color: #fff;
+            text-decoration: none;
+            border: 2px solid #333;
+            padding: 10px 16px;
+            border-radius: 10px;
+            font: bold 14px/1 'Courier New', monospace;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+        }
+        .discord-btn:hover {
+            border-color: #00ffff;
+            box-shadow: 0 0 18px rgba(0,255,255,0.35);
+        }
     </style>
 </head>
 <body>
+    <a class="discord-btn" href="https://discord.gg/pD6tDXbSum" target="_blank" rel="noopener">DISCORD</a>
     <div class="container">
         <h1>ARCADE</h1>
         <div class="subtitle">SELECT A GAME</div>
