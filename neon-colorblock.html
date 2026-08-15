@@ -31,8 +31,8 @@
 
         // Resize
         function resize() {
-            canvas.width = Math.min(window.innerWidth - 40, 800);
-            canvas.height = Math.min(window.innerHeight - 40, 600);
+            canvas.width = Math.min(window.innerWidth - 40, 900);
+            canvas.height = Math.min(window.innerHeight - 40, 650);
         }
         window.addEventListener('resize', resize);
         resize();
@@ -42,19 +42,31 @@
         let state = State.MENU;
 
         // Grid
-        const GRID = 40;
+        const GRID = 80;
         let COLS = Math.floor(canvas.width / GRID);
         let ROWS = Math.floor(canvas.height / GRID);
 
-        // Player
-        let player = { x: 0, y: 0, color: 0 };
-        const COLORS = ['#ff0040', '#00ff80', '#00aaff', '#ffcc00'];
-        const COLOR_NAMES = ['RED', 'GREEN', 'BLUE', 'YELLOW'];
+        // Colors
+        const COLORS = [
+            '#ff0040',
+            '#00ff80',
+            '#00aaff',
+            '#ffcc00',
+            '#ff5500',
+            '#aa00ff',
+            '#00ffcc',
+            '#ff0088'
+        ];
+        const COLOR_NAMES = ['RED','GREEN','BLUE','YELLOW','ORANGE','PURPLE','CYAN','PINK'];
 
-        // Floor
-        let floorColor = 0;
+        // Player
+        let player = { x: 0, y: 0 };
+
+        // Floor state
+        let targetColor = 0;
         let floorTimer = 0;
-        const FLOOR_CHANGE_INTERVAL = 180; // frames (~3s at 60fps)
+        const FLOOR_CHANGE_INTERVAL = 220;
+        let floorColors = [];
 
         // Score
         let score = 0;
@@ -74,25 +86,41 @@
             } catch (e) {}
         }
 
+        function randomColor(exclude) {
+            let c;
+            do {
+                c = Math.floor(Math.random() * COLORS.length);
+            } while (c === exclude && COLORS.length > 1);
+            return c;
+        }
+
         function resetGame() {
             player.x = Math.floor(COLS / 2);
             player.y = ROWS - 2;
-            player.color = Math.floor(Math.random() * COLORS.length);
-            floorColor = Math.floor(Math.random() * COLORS.length);
+
+            floorColors = [];
+            for (let y = 0; y < ROWS; y++) {
+                floorColors[y] = [];
+                for (let x = 0; x < COLS; x++) {
+                    floorColors[y][x] = Math.floor(Math.random() * COLORS.length);
+                }
+            }
+
+            targetColor = randomColor(-1);
             floorTimer = FLOOR_CHANGE_INTERVAL;
             score = 0;
             particles = [];
         }
 
         function spawnParticles(x, y, color) {
-            for (let i = 0; i < 8; i++) {
+            for (let i = 0; i < 10; i++) {
                 particles.push({
                     x: x * GRID + GRID / 2,
                     y: y * GRID + GRID / 2,
-                    vx: (Math.random() - 0.5) * 6,
-                    vy: (Math.random() - 0.5) * 6,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8,
                     life: 1,
-                    color: color
+                    color: COLORS[color]
                 });
             }
         }
@@ -102,7 +130,7 @@
                 const p = particles[i];
                 p.x += p.vx;
                 p.y += p.vy;
-                p.life -= 0.03;
+                p.life -= 0.04;
                 if (p.life <= 0) particles.splice(i, 1);
             }
         }
@@ -112,27 +140,23 @@
                 ctx.globalAlpha = p.life;
                 ctx.fillStyle = p.color;
                 ctx.shadowColor = p.color;
-                ctx.shadowBlur = 10;
-                ctx.fillRect(p.x - 3, p.y - 3, 6, 6);
+                ctx.shadowBlur = 14;
+                ctx.fillRect(p.x - 4, p.y - 4, 8, 8);
             });
             ctx.globalAlpha = 1;
             ctx.shadowBlur = 0;
         }
 
-        function changeFloor() {
-            let newColor;
-            do {
-                newColor = Math.floor(Math.random() * COLORS.length);
-            } while (newColor === floorColor);
-            floorColor = newColor;
+        function changeTarget() {
+            targetColor = randomColor(targetColor);
             floorTimer = FLOOR_CHANGE_INTERVAL;
 
-            // If player is on wrong color, game over
-            if (player.color !== floorColor) {
+            const current = floorColors[player.y] ? floorColors[player.y][player.x] : -1;
+            if (current !== targetColor) {
                 gameOver();
             } else {
                 score++;
-                spawnParticles(player.x, player.y, COLORS[player.color]);
+                spawnParticles(player.x, player.y, targetColor);
             }
         }
 
@@ -144,25 +168,28 @@
             }
         }
 
+        function update() {
+            if (state === State.PLAYING) {
+                floorTimer--;
+                if (floorTimer <= 0) {
+                    changeTarget();
+                }
+            }
+            updateParticles();
+        }
+
         function draw() {
             // Clear
             ctx.fillStyle = '#050505';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Floor
-            for (let x = 0; x < COLS; x++) {
-                for (let y = 0; y < ROWS; y++) {
-                    ctx.fillStyle = '#1a1a1a';
-                    ctx.fillRect(x * GRID, y * GRID, GRID - 1, GRID - 1);
-                }
-            }
-
-            // Floor color blocks
-            ctx.fillStyle = COLORS[floorColor];
-            ctx.globalAlpha = 0.3;
-            for (let x = 0; x < COLS; x++) {
-                for (let y = 0; y < ROWS; y++) {
-                    ctx.fillRect(x * GRID, y * GRID, GRID - 1, GRID - 1);
+            // Draw colored floor blocks
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    const c = floorColors[y][x];
+                    ctx.fillStyle = COLORS[c];
+                    ctx.globalAlpha = 0.18;
+                    ctx.fillRect(x * GRID, y * GRID, GRID - 2, GRID - 2);
                 }
             }
             ctx.globalAlpha = 1;
@@ -171,44 +198,44 @@
             drawParticles();
 
             // Player
-            ctx.shadowColor = COLORS[player.color];
-            ctx.shadowBlur = 20;
-            ctx.fillStyle = COLORS[player.color];
+            ctx.shadowColor = '#ffffff';
+            ctx.shadowBlur = 24;
+            ctx.fillStyle = '#ffffff';
             ctx.fillRect(
-                player.x * GRID + 4,
-                player.y * GRID + 4,
-                GRID - 8,
-                GRID - 8
+                player.x * GRID + 10,
+                player.y * GRID + 10,
+                GRID - 20,
+                GRID - 20
             );
             ctx.shadowBlur = 0;
 
+            // HUD
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 20px Courier New';
+            ctx.textAlign = 'left';
+            ctx.fillText(`SCORE: ${score}`, 20, 30);
+            ctx.fillText(`BEST: ${highScore}`, 20, 55);
+
+            ctx.fillStyle = COLORS[targetColor];
+            ctx.font = 'bold 18px Courier New';
+            ctx.fillText(`TARGET: ${COLOR_NAMES[targetColor]}`, 20, 85);
+
+            const under = floorColors[player.y] ? floorColors[player.y][player.x] : -1;
+            ctx.fillStyle = COLORS[under];
+            ctx.fillText(`UNDER: ${COLOR_NAMES[under]}`, 20, 110);
+
             // Timer bar
             const barWidth = canvas.width - 40;
-            const barHeight = 8;
+            const barHeight = 10;
             const barX = 20;
-            const barY = 15;
-            ctx.fillStyle = '#333';
+            const barY = canvas.height - 24;
+            ctx.fillStyle = '#222';
             ctx.fillRect(barX, barY, barWidth, barHeight);
-            ctx.fillStyle = COLORS[floorColor];
+            ctx.fillStyle = COLORS[targetColor];
             ctx.fillRect(barX, barY, barWidth * (floorTimer / FLOOR_CHANGE_INTERVAL), barHeight);
 
-            if (state === State.MENU) {
-                drawMenu();
-            } else if (state === State.PLAYING) {
-                // HUD
-                ctx.fillStyle = '#fff';
-                ctx.font = 'bold 20px Courier New';
-                ctx.textAlign = 'left';
-                ctx.fillText(`SCORE: ${score}`, 20, 50);
-                ctx.fillText(`BEST: ${highScore}`, 20, 75);
-                ctx.fillStyle = COLORS[floorColor];
-                ctx.font = 'bold 16px Courier New';
-                ctx.fillText(`FLOOR: ${COLOR_NAMES[floorColor]}`, 20, 100);
-                ctx.fillStyle = COLORS[player.color];
-                ctx.fillText(`YOU: ${COLOR_NAMES[player.color]}`, 20, 120);
-            } else if (state === State.GAMEOVER) {
-                drawGameOver();
-            }
+            if (state === State.MENU) drawMenu();
+            else if (state === State.GAMEOVER) drawGameOver();
         }
 
         function drawMenu() {
@@ -217,15 +244,15 @@
             ctx.textAlign = 'center';
             ctx.shadowColor = '#00ffff';
             ctx.shadowBlur = 20;
-            ctx.fillText('NEON COLOR', canvas.width / 2, canvas.height / 2 - 80);
-            ctx.fillText('BLOCK', canvas.width / 2, canvas.height / 2 - 10);
+            ctx.fillText('NEON COLOR', canvas.width / 2, canvas.height / 2 - 90);
+            ctx.fillText('BLOCK', canvas.width / 2, canvas.height / 2 - 20);
             ctx.shadowBlur = 0;
 
             ctx.fillStyle = '#fff';
-            ctx.font = '24px Courier New';
-            ctx.fillText('Match your color to the floor', canvas.width / 2, canvas.height / 2 + 40);
-            ctx.fillText('Use 1-4 keys to change color', canvas.width / 2, canvas.height / 2 + 70);
-            ctx.fillText('Survive as long as you can', canvas.width / 2, canvas.height / 2 + 100);
+            ctx.font = '22px Courier New';
+            ctx.fillText('Move to match the TARGET color', canvas.width / 2, canvas.height / 2 + 40);
+            ctx.fillText('Use WASD / ARROW KEYS', canvas.width / 2, canvas.height / 2 + 70);
+            ctx.fillText('Survive as long as possible', canvas.width / 2, canvas.height / 2 + 100);
 
             const time = Date.now() / 1000;
             const alpha = 0.5 + Math.sin(time * 3) * 0.5;
@@ -238,11 +265,10 @@
             ctx.fillStyle = '#666';
             ctx.font = '16px Courier New';
             ctx.fillText('ESC to return to Arcade', canvas.width / 2, canvas.height / 2 + 200);
-            ctx.fillText('[1-4] Change Color', canvas.width / 2, canvas.height / 2 + 225);
         }
 
         function drawGameOver() {
-            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillStyle = 'rgba(0,0,0,0.75)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             ctx.fillStyle = '#f00';
@@ -279,16 +305,6 @@
             ctx.fillText('ESC to return to Arcade', canvas.width / 2, canvas.height / 2 + 130);
         }
 
-        function update() {
-            if (state === State.PLAYING) {
-                floorTimer--;
-                if (floorTimer <= 0) {
-                    changeFloor();
-                }
-            }
-            updateParticles();
-        }
-
         function loop() {
             update();
             draw();
@@ -315,10 +331,20 @@
             }
 
             if (state === State.PLAYING) {
-                // 1-4 change color
-                const num = parseInt(e.key);
-                if (num >= 1 && num <= 4) {
-                    player.color = num - 1;
+                let dx = 0;
+                let dy = 0;
+                if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') dy = -1;
+                if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') dy = 1;
+                if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') dx = -1;
+                if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') dx = 1;
+
+                if (dx !== 0 || dy !== 0) {
+                    const nx = player.x + dx;
+                    const ny = player.y + dy;
+                    if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS) {
+                        player.x = nx;
+                        player.y = ny;
+                    }
                 }
             }
         });
